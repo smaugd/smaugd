@@ -1,0 +1,41 @@
+name: Ditado Livre
+
+on:
+  push:
+    paths: ["ditado-livre/**", ".github/workflows/ditado-livre.yml"]
+  pull_request:
+    paths: ["ditado-livre/**", ".github/workflows/ditado-livre.yml"]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ditado-livre
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar com o instalador de verdade
+        shell: pwsh
+        run: ./instalar.ps1
+      - name: Testes
+        run: |
+          .venv\Scripts\python.exe -m pip install pytest
+          .venv\Scripts\python.exe -m pytest -v
+      - name: Importar a interface (tkinter, bandeja, teclado)
+        run: .venv\Scripts\python.exe -c "import ditado_livre.__main__, ditado_livre.overlay, ditado_livre.tray, ditado_livre.hotkey, pystray, pynput, sounddevice; print('ok')"
+      - name: Whisper de verdade (modelo tiny, CPU) com voz sintetizada do Windows
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Speech
+          $voice = New-Object System.Speech.Synthesis.SpeechSynthesizer
+          if ($voice.GetInstalledVoices().Count -eq 0) { Write-Host "Sem vozes SAPI neste runner" }
+          else {
+            $voice.SetOutputToWaveFile("$PWD\teste.wav")
+            $voice.Speak("Hello world, this is a dictation test.")
+            $voice.Dispose()
+          }
+          .venv\Scripts\python.exe ci_smoke_whisper.py teste.wav
