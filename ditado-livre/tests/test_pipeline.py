@@ -8,7 +8,7 @@ from ditado_livre.cleanup.llm import CleanupError
 from ditado_livre.history import History
 from ditado_livre.hotkey import CANCEL, START, STOP
 from ditado_livre.pipeline import (
-    ERROR, IDLE, PROCESSING, RECORDING, WARNING,
+    DONE, ERROR, IDLE, PROCESSING, RECORDING, WARNING,
     DictationController, DictationPipeline, build_cleaner,
 )
 from ditado_livre.transcribe.base import TranscriptionError
@@ -101,7 +101,7 @@ def run_controller(config, transcriber, recorder=None, events=(START, STOP)):
 
     def on_status(status, message):
         statuses.append(status)
-        if status in (IDLE, WARNING, ERROR) and PROCESSING in statuses:
+        if status in (IDLE, DONE, WARNING, ERROR) and PROCESSING in statuses:
             done.set()
 
     pipeline = DictationPipeline(config, transcriber, None, pasted.append)
@@ -114,8 +114,18 @@ def run_controller(config, transcriber, recorder=None, events=(START, STOP)):
 def test_controller_records_and_processes(config):
     _, statuses, pasted, done = run_controller(config, FakeTranscriber("Olá."))
     assert done.wait(5)
-    assert statuses[:2] == [RECORDING, PROCESSING] and statuses[-1] == IDLE
+    assert statuses[:2] == [RECORDING, PROCESSING] and statuses[-1] == DONE
     assert pasted == ["Olá. "]
+
+
+def test_progress_reports_ai_step(config, one_second):
+    steps = []
+    pipeline = DictationPipeline(config, FakeTranscriber("oi"), FakeCleaner(result="Oi."), lambda t: None)
+    pipeline.process(one_second, progress=steps.append)
+    assert steps == ["Revisando com IA…"]
+    steps.clear()
+    DictationPipeline(config, FakeTranscriber("oi"), None, lambda t: None).process(one_second, progress=steps.append)
+    assert steps == []
 
 
 def test_controller_cancel(config):

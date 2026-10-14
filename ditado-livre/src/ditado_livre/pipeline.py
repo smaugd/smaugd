@@ -18,8 +18,8 @@ from .transcribe.base import SAMPLE_RATE, Transcriber, TranscriptionError
 
 log = logging.getLogger(__name__)
 
-IDLE, LOADING, RECORDING, PROCESSING, WARNING, ERROR = (
-    "idle", "loading", "recording", "processing", "warning", "error",
+IDLE, LOADING, RECORDING, PROCESSING, DONE, WARNING, ERROR = (
+    "idle", "loading", "recording", "processing", "done", "warning", "error",
 )
 StatusCallback = Callable[[str, str], None]
 
@@ -71,7 +71,7 @@ class DictationPipeline:
         self.paste = paste
         self.history = history
 
-    def process(self, audio: np.ndarray) -> DictationResult | None:
+    def process(self, audio: np.ndarray, progress: Callable[[str], None] | None = None) -> DictationResult | None:
         if audio.size < float(self.config["min_recording_seconds"]) * SAMPLE_RATE:
             return None
         if self.transcriber is None:
@@ -83,6 +83,8 @@ class DictationPipeline:
         cleaned_by_ai = False
         warning = ""
         if self.cleaner is not None and text:
+            if progress:
+                progress("Revisando com IA…")
             try:
                 text = self.cleaner.clean(text)
                 cleaned_by_ai = True
@@ -138,13 +140,14 @@ class DictationController:
     def _process(self, audio: np.ndarray) -> None:
         try:
             self.on_status(PROCESSING, "Transcrevendo…")
-            result = self.pipeline.process(audio)
+            result = self.pipeline.process(audio, progress=lambda msg: self.on_status(PROCESSING, msg))
             if result is None:
                 self.on_status(IDLE, "Nada foi ouvido")
             elif result.warning:
                 self.on_status(WARNING, result.warning)
             else:
-                self.on_status(IDLE, "Pronto")
+                words = len(result.text.split())
+                self.on_status(DONE, f"Colado · {words} {'palavra' if words == 1 else 'palavras'}")
         except TranscriptionError as exc:
             log.error("%s", exc)
             self.on_status(ERROR, str(exc))

@@ -14,7 +14,7 @@ class GroqTranscriber:
 
     def __init__(self, api_key: str, model: str, language: str, client: httpx.Client | None = None) -> None:
         if not api_key:
-            raise TranscriptionError("Falta a chave da Groq (groq_api_key) nas configurações")
+            raise TranscriptionError("Falta a chave da Groq: cole em Configurações › Transcrição")
         self.api_key = api_key
         self.model = model
         self.language = language

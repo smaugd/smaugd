@@ -26,7 +26,7 @@ jobs:
           .venv\Scripts\python.exe -m pip install pytest
           .venv\Scripts\python.exe -m pytest -v
       - name: Importar a interface (tkinter, bandeja, teclado)
-        run: .venv\Scripts\python.exe -c "import ditado_livre.__main__, ditado_livre.overlay, ditado_livre.tray, ditado_livre.hotkey, pystray, pynput, sounddevice; print('ok')"
+        run: .venv\Scripts\python.exe -c "import ditado_livre.__main__, ditado_livre.overlay, ditado_livre.tray, ditado_livre.hotkey, ditado_livre.settings_window, ditado_livre.history_window, sv_ttk, pystray, pynput, sounddevice; print('ok')"
       - name: Whisper de verdade (modelo tiny, CPU) com voz sintetizada do Windows
         shell: pwsh
         run: |

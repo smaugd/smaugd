@@ -32,6 +32,8 @@ segura Ctrl+Win → grava o microfone → solta
    ```
    Se preferir não instalar o Ollama, use a Groq (veja abaixo) ou desligue "Limpeza com IA" no menu.
 
+**Para atualizar** para uma versão nova: substitua os arquivos da pasta e rode `instalar.bat` de novo. Suas configurações e seu histórico são mantidos.
+
 Na primeira vez que o app abre, ele baixa o modelo Whisper, que tem mais de 1 GB. A janelinha mostra "Carregando…" até terminar.
 
 ## Uso
@@ -41,53 +43,63 @@ Na primeira vez que o app abre, ele baixa o modelo Whisper, que tem mais de 1 GB
 | Ditar | Segure **Ctrl + Win**, fale e solte |
 | Cancelar | **Esc** enquanto grava |
 | Menu | Ícone azul de microfone perto do relógio (pode estar na setinha ^) |
+| Configurações | Clique duplo no ícone |
 
-A janelinha embaixo da tela mostra o andamento: vermelho grava, azul processa, verde terminou e laranja avisa (por exemplo, "IA indisponível").
+Uma pílula escura aparece embaixo da tela mostrando o andamento:
+
+- **Gravando**: bolinha vermelha pulsando, ondas que seguem a sua voz e o tempo.
+- **Processando**: pontinhos azuis, com "Transcrevendo…" e depois "Revisando com IA…".
+- **Pronto**: sinal verde e quantas palavras foram coladas.
+- **Avisos e erros**: ícone laranja ou vermelho com a explicação.
+
+Ela não rouba o foco do programa onde você digita e deixa os cliques passarem.
 
 **Teste rápido**: abra o Bloco de Notas, segure Ctrl+Win e diga *"é… amanhã às duas, não, às três, eu passo aí"*. O esperado é algo como **"Amanhã às 3, eu passo aí."**
 
 ## Menu da bandeja
 
-- **Transcrever no meu PC / na nuvem (Groq)**: escolhe o motor.
-- **Limpeza com IA** e **Remover vícios**: ligam ou desligam cada etapa.
-- **Ver últimos ditados**: abre os 30 últimos textos. Útil quando a colagem falha.
-- **Abrir configurações**: abre o `config.json` no Bloco de Notas. Depois de salvar, use **Recarregar configurações**.
+Clique no ícone de microfone perto do relógio:
 
-## Configurações (`%APPDATA%\DitadoLivre\config.json`)
+- **Configurações…**: abre a janela de configurações (também abre com clique duplo no ícone).
+- **Histórico…**: os últimos ditados, com busca e botão **Copiar**. Útil quando a colagem falha.
+- **Transcrição**, **Limpeza com IA** e **Remover vícios**: atalhos rápidos para as opções mais usadas.
 
-| Chave | Padrão | O que faz |
-|---|---|---|
-| `hotkey` | `ctrl+win` | Atalho. Use `+` entre teclas: `ctrl`, `alt`, `shift`, `win`, `f9`, `space`, letras… |
-| `hotkey_mode` | `hold` | `hold` = segurar para falar; `toggle` = aperta para começar e de novo para parar |
-| `engine` | `local` | `local` (Whisper no PC) ou `groq` |
-| `local_model` | `large-v3-turbo` | Modelos menores e mais rápidos: `small`, `medium` |
-| `device` | `auto` | `auto` tenta a GPU e cai para o processador; ou `cuda` / `cpu` |
-| `ai_cleanup` | `true` | Liga a revisão com IA |
-| `llm_provider` | `ollama` | `ollama` (no PC) ou `groq` |
-| `ollama_model` | `qwen2.5:3b` | Qualquer modelo baixado com `ollama pull` |
-| `groq_api_key` | vazio | Chave da Groq (veja abaixo) |
-| `extra_filler_words` | `[]` | Vícios extras a remover, ex.: `["tipo assim"]` |
-| `append_space` | `true` | Põe um espaço depois do texto, para emendar o próximo ditado |
-| `restore_clipboard` | `true` | Devolve o texto que estava copiado antes |
+A cor do ícone acompanha o estado: azul (pronto), vermelho (gravando), cinza (carregando).
+
+## Configurações
+
+A janela segue o tema claro ou escuro do Windows e tem quatro abas:
+
+| Aba | O que dá para mudar |
+|---|---|
+| Geral | Atalho (Ctrl + Win, Ctrl + Alt, F9… ou outra combinação), segurar ou apertar para ligar e desligar, devolver o que estava copiado, espaço no final, **abrir junto com o Windows** |
+| Transcrição | No computador ou na nuvem (Groq), modelo do Whisper, placa de vídeo ou processador, idioma, chave da Groq |
+| Limpeza | Remover hesitações e palavras extras, revisão com IA (Ollama ou Groq) e o botão **Testar IA** |
+| Sobre | Versão e botão para abrir a pasta de dados |
+
+Mudanças no atalho e na limpeza valem na hora. Trocar o modelo ou o motor de transcrição recarrega o Whisper.
+
+As opções ficam em `%APPDATA%\DitadoLivre\config.json`. Se você editar esse arquivo à mão, feche e abra o app de novo.
 
 O log de erros fica em `%APPDATA%\DitadoLivre\ditado-livre.log`.
 
 ### Usar a Groq (nuvem, gratuita com limites)
 
 1. Crie uma conta em https://console.groq.com e gere uma *API key*.
-2. Cole a chave em `groq_api_key` no `config.json` e use **Recarregar configurações**.
-3. No menu, escolha **Transcrever na nuvem (Groq)**. Para a limpeza também ir para a Groq, mude `llm_provider` para `groq`.
+2. Abra **Configurações › Transcrição**, cole a chave e escolha **Na nuvem (Groq)**.
+3. Para a revisão com IA também ir para a Groq, escolha **Groq — na nuvem** na aba **Limpeza** e clique em **Testar IA**.
 
 Os limites do plano gratuito mudam com o tempo; confira em https://console.groq.com/docs/rate-limits. Com a Groq, o áudio sai do seu PC.
 
 ## Problemas comuns
 
 - **Aparece "processador (mais lento)" com placa NVIDIA**: atualize o driver da NVIDIA e rode `instalar.bat` de novo. O motivo exato fica no log.
-- **Lento ou sem memória na placa**: troque `local_model` para `small` ou `medium`, ou use a Groq na limpeza.
+- **Lento ou sem memória na placa**: em **Configurações › Transcrição**, escolha o modelo Médio ou Pequeno, ou use a Groq na limpeza.
 - **Não colou**: alguns programas abertos como administrador não aceitam colagem de outro programa (regra do Windows). O texto fica em **Ver últimos ditados**.
-- **Abre o menu Iniciar ao soltar o atalho**: troque `hotkey` para outra combinação, ex.: `ctrl+alt` ou `f9`.
+- **Abre o menu Iniciar ao soltar o atalho**: troque o atalho em **Configurações › Geral**, ex.: Ctrl + Alt ou F9.
 - **Ver mensagens de erro**: abra `iniciar-com-terminal.bat`.
-- **Abrir junto com o Windows**: aperte Win+R, digite `shell:startup` e copie o atalho "Ditado Livre" para essa pasta.
+- **Abrir junto com o Windows**: marque a opção em **Configurações › Geral**.
+- **A IA não revisa**: em **Configurações › Limpeza**, clique em **Testar IA**; a mensagem diz o que falta (por exemplo, o Ollama fechado).
 
 ## Para desenvolvedores
 
@@ -98,6 +110,6 @@ pytest
 python -m ditado_livre
 ```
 
-Código em `src/ditado_livre/`: `pipeline.py` (fluxo), `transcribe/` (Whisper e Groq), `cleanup/` (regras, prompt e IA), `hotkey.py`, `audio.py`, `output.py`, `overlay.py`, `tray.py`. Ideias para a próxima versão estão em [`FASE2-sugestoes.md`](FASE2-sugestoes.md).
+Código em `src/ditado_livre/`: `pipeline.py` (fluxo), `transcribe/` (Whisper e Groq), `cleanup/` (regras, prompt e IA), `hotkey.py`, `audio.py`, `output.py`; interface em `overlay.py` (pílula), `tray.py`, `settings_window.py`, `history_window.py` e `theme.py` (cores, tema [Sun Valley](https://github.com/rdbende/Sun-Valley-ttk-theme), modo escuro e nitidez em telas com zoom). Ideias para a próxima versão estão em [`FASE2-sugestoes.md`](FASE2-sugestoes.md).
 
 Inspirado nos projetos open-source [Handy](https://github.com/cjpais/Handy) e [OpenWhispr](https://github.com/OpenWhispr/openwhispr). Licença MIT.

@@ -10,21 +10,23 @@ import sys
 import threading
 import tkinter as tk
 
-from . import APP_NAME, __version__
+from . import APP_NAME, __version__, autostart, theme
 from .audio import Recorder
-from .config import ConfigError, app_dir, config_path, load_config, save_config
+from .config import app_dir, load_config, save_config
 from .history import History
 from .hotkey import HotkeyListener
 from .output import Paster
 from .pipeline import (
-    ERROR, IDLE, LOADING, PROCESSING, RECORDING,
+    DONE, ERROR, LOADING, PROCESSING, RECORDING,
     DictationController, DictationPipeline, build_cleaner, build_transcriber,
 )
 from .transcribe.base import TranscriptionError
 
 log = logging.getLogger("ditado_livre")
 
-_TRAY_COLORS = {RECORDING: "#d93025", PROCESSING: "#1a73e8", LOADING: "#5f6368", ERROR: "#b3261e"}
+_TRAY_COLORS = {RECORDING: theme.RECORDING, PROCESSING: theme.ACCENT, LOADING: "#6b7280", ERROR: "#b42318"}
+# Só estas opções exigem recarregar o Whisper (que é lento); o resto vale na hora.
+_TRANSCRIBER_KEYS = ("engine", "local_model", "device", "language", "groq_api_key", "groq_transcribe_model")
 
 
 def _open_file(path) -> None:
@@ -32,6 +34,16 @@ def _open_file(path) -> None:
         os.startfile(str(path))  # noqa: S606 - abre com o programa padrão (Bloco de Notas)
     else:
         subprocess.Popen(["xdg-open", str(path)])  # noqa: S603, S607
+
+
+def _test_cleanup(config: dict) -> str:
+    """Usado pelo botão "Testar IA" das Configurações."""
+    cleaner = build_cleaner(config)
+    if cleaner is None:
+        raise RuntimeError("A revisão com IA está desligada ou sem chave")
+    from .cleanup.fillers import remove_fillers
+
+    return cleaner.clean(remove_fillers("hum, amanhã às duas, não, às três eu passo aí"))
 
 
 def _already_running() -> bool:
@@ -49,8 +61,13 @@ class App:
         self.config = load_config()
         self.status_text = "iniciando"
         self.events: queue.Queue = queue.Queue()
+        theme.enable_high_dpi()
         self.root = tk.Tk()
         self.root.withdraw()
+        self.dark = theme.apply_theme(self.root)
+        self._settings_window = None
+        self._history_window = None
+        self._transcriber_signature = None
         from .overlay import Overlay
         from .tray import Tray
 
@@ -74,8 +91,12 @@ class App:
         self.paster = Paster(restore_clipboard=self.config["restore_clipboard"])
         self.pipeline.config = self.config
         self.pipeline.cleaner = build_cleaner(self.config)
-        self.pipeline.transcriber = None
         self.history.max_items = self.config["history_size"]
+        signature = tuple(self.config[key] for key in _TRANSCRIBER_KEYS)
+        if signature == self._transcriber_signature and self.pipeline.transcriber is not None:
+            return
+        self._transcriber_signature = signature
+        self.pipeline.transcriber = None
         try:
             self.pipeline.transcriber = build_transcriber(self.config)
         except TranscriptionError as exc:
@@ -86,8 +107,9 @@ class App:
     def _preload(self) -> None:
         transcriber = self.pipeline.transcriber
         load = getattr(transcriber, "load", None)
+        hotkey = self._hotkey_label()
         if load is None:
-            self.set_status(IDLE, f"Pronto — segure {self.config['hotkey']} e fale")
+            self.set_status(DONE, f"Pronto — segure {hotkey} e fale")
             return
         self.set_status(LOADING, "Carregando o Whisper (na 1ª vez ele é baixado, pode demorar)…")
         try:
@@ -95,34 +117,52 @@ class App:
         except TranscriptionError as exc:
             self.set_status(ERROR, str(exc))
             return
-        where = "placa de vídeo" if transcriber.active_device == "cuda" else "processador (mais lento)"
-        self.set_status(IDLE, f"Pronto ({where}) — segure {self.config['hotkey']} e fale")
+        where = "placa de vídeo" if transcriber.active_device == "cuda" else "processador, mais lento"
+        self.set_status(DONE, f"Pronto ({where}) — segure {hotkey} e fale")
+
+    def _hotkey_label(self) -> str:
+        from .settings_window import format_hotkey
+
+        return format_hotkey(self.config["hotkey"])
 
     def update_setting(self, key: str, value) -> None:
         self.config[key] = value
         save_config(self.config)
         self.events.put(("apply", None))
 
-    def reload_config(self) -> None:
-        try:
-            self.config = load_config()
-        except ConfigError as exc:
-            self.set_status(ERROR, str(exc))
-            return
-        self.events.put(("apply", None))
-
-    def open_config(self) -> None:
-        _open_file(config_path())
-        self.tray.notify("Depois de salvar o arquivo, use 'Recarregar configurações'.")
+    def open_settings(self) -> None:
+        self.events.put(("open", "settings"))
 
     def open_history(self) -> None:
-        path = app_dir() / "ultimos-ditados.txt"
-        lines = []
-        for item in self.history.recent(30):
-            ia = "com IA" if item["limpo_por_ia"] else "sem IA"
-            lines.append(f"[{item['criado_em']} · {item['motor']} · {ia}]\n{item['final']}\n")
-        path.write_text("\n".join(lines) or "Nenhum ditado ainda.", encoding="utf-8")
-        _open_file(path)
+        self.events.put(("open", "history"))
+
+    def _show_window(self, which: str) -> None:
+        from .history_window import HistoryWindow
+        from .settings_window import SettingsWindow
+
+        current = self._settings_window if which == "settings" else self._history_window
+        if current is not None and current.win.winfo_exists():
+            current.win.deiconify()
+            current.win.lift()
+            current.win.focus_force()
+            return
+        if which == "settings":
+            self._settings_window = SettingsWindow(
+                self.root, dict(self.config), self.dark, self._save_settings, _test_cleanup,
+                lambda: _open_file(app_dir()),
+            )
+        else:
+            self._history_window = HistoryWindow(self.root, self.history.recent(200), self.dark)
+
+    def _save_settings(self, config: dict, start_with_windows: bool) -> None:
+        self.config = config
+        save_config(self.config)
+        try:
+            autostart.set_enabled(start_with_windows)
+        except OSError as exc:
+            log.warning("Não consegui mudar a inicialização com o Windows: %s", exc)
+        self._apply_config()
+        self.tray.refresh()
 
     # --- status e colagem ---------------------------------------------------
     def set_status(self, status: str, message: str) -> None:
@@ -142,9 +182,11 @@ class App:
                     status, message = payload
                     self.status_text = message
                     self.overlay.show(status, message)
-                    self.tray.refresh(_TRAY_COLORS.get(status, "#1a73e8"))
+                    self.tray.refresh(_TRAY_COLORS.get(status, theme.ACCENT), tooltip=message)
                 elif kind == "level":
                     self.overlay.level(payload)
+                elif kind == "open":
+                    self._show_window(payload)
                 elif kind == "apply":
                     self._apply_config()
                     self.tray.refresh()
